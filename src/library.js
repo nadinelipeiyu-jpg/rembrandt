@@ -59,14 +59,17 @@ export function buildLibrary(app, api) {
   let similar = null; // { ref, list } while showing photos like one, most alike first
 
   const albumView = () => (prefs.view.startsWith('album:') ? A.albumById(prefs.view.slice(6)) : null);
-  const folderView = () => (prefs.view.startsWith('folder:') ? F.folderById(prefs.view.slice(7)) : null);
+  const folderView = () => (prefs.view.startsWith('folder:') ? F.folderById(prefs.view.slice(7).split('::')[0]) : null);
+  // zh-TW fork: a subfolder of a synced folder ("folder:<id>::2026/Client A"), or '' for the whole folder.
+  const folderSub = () => (prefs.view.startsWith('folder:') ? prefs.view.slice(7).split('::')[1] || '' : '');
+  const openDirs = new Set(prefs.openDirs || []);
   const albumPhotos = (a) => { const keys = new Set(a.keys); return app.images.filter((e) => keys.has(e.key)); };
   function currentName() {
     if (similar) return `Like “${similar.ref.name}”`;
     const a = albumView();
     if (a) return a.name;
     const f = folderView();
-    if (f) return f.name;
+    if (f) return [f.name, ...(folderSub() ? folderSub().split('/') : [])].join(' › ');
     if (prefs.view === 'albums') return 'Albums';
     return (SMART.find((s) => s.id === prefs.view) || SMART[0]).name;
   }
@@ -122,6 +125,48 @@ export function buildLibrary(app, api) {
     ];
   }
 
+  // zh-TW fork: a synced folder's subfolders, as a tree under it (from where its photos are). The
+  // first level always shows; deeper ones when their parent is open or holds the current view.
+  function subfolderRows(f, item) {
+    const counts = new Map();
+    for (const e of app.images) {
+      if (e.src?.folder !== f.id || !e.src.rel) continue;
+      const parts = e.src.rel.split('/').slice(0, -1);
+      for (let i = 1; i <= parts.length; i++) { const k = parts.slice(0, i).join('/'); counts.set(k, (counts.get(k) || 0) + 1); }
+    }
+    if (!counts.size) return [];
+    const cur = prefs.view.startsWith('folder:' + f.id + '::') ? folderSub() : '';
+    const kids = new Map();
+    for (const k of counts.keys()) {
+      const parent = k.includes('/') ? k.slice(0, k.lastIndexOf('/')) : '';
+      if (!kids.has(parent)) kids.set(parent, []);
+      kids.get(parent).push(k);
+    }
+    const isOpen = (k) => openDirs.has(f.id + '::' + k) || cur === k || cur.startsWith(k + '/');
+    const rows = [];
+    const walk = (parent, depth) => {
+      for (const k of (kids.get(parent) || []).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))) {
+        const has = kids.has(k), open = has && isOpen(k);
+        const chev = el('button', { class: 'side-chev', type: 'button', 'aria-label': open ? 'Collapse' : 'Expand',
+          style: `visibility:${has ? 'visible' : 'hidden'};background:none;border:0;padding:0;width:12px;color:var(--dim);cursor:pointer;font-size:10px;flex:none` }, open ? '▾' : '▸');
+        chev.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const id = f.id + '::' + k;
+          if (open) { openDirs.delete(id); for (const d of [...openDirs]) if (d.startsWith(id + '/')) openDirs.delete(d); } else openDirs.add(id);
+          prefs.openDirs = [...openDirs]; savePrefs(); renderSide();
+        });
+        const row = item(`folder:${f.id}::${k}`, k.slice(k.lastIndexOf('/') + 1), 'folder', counts.get(k));
+        row.style.paddingLeft = `${9 + depth * 14}px`;
+        row.prepend(chev);
+        row.title = k;
+        rows.push(row);
+        if (open) walk(k, depth + 1);
+      }
+    };
+    walk('', 1);
+    return rows;
+  }
+
   function renderSide() {
     side.textContent = '';
     const count = (t) => app.images.filter(t).length;
@@ -175,6 +220,7 @@ export function buildLibrary(app, api) {
           { label: 'Stop syncing', icon: 'trash', onClick: () => api.unsyncFolder(f) },
         ]); }, 'sm side-more');
         side.append(item('folder:' + f.id, f.name, 'folder', n, el('span', { class: 'side-extra' }, state, more)));
+        side.append(...subfolderRows(f, item));
       }
     }
     side.append(el('span', { class: 'grow' }), storage);
@@ -324,7 +370,7 @@ export function buildLibrary(app, api) {
     const a = albumView();
     const f = folderView();
     if (a) list = albumPhotos(a);
-    else if (f) list = list.filter((e) => e.src?.folder === f.id);
+    else if (f) { const sub = folderSub(); list = list.filter((e) => e.src?.folder === f.id && (!sub || e.src.rel.startsWith(sub + '/'))); }
     else if (prefs.view !== 'albums') list = list.filter((SMART.find((s) => s.id === prefs.view) || SMART[0]).test);
     if (prefs.view !== 'rejected' && !a && !f && prefs.view !== 'all') list = list.filter((e) => e.flag !== -1);
     const words = (e) => [e.name, e.copyName, e.meta?.make, e.meta?.model, e.kind, e.label, ...(e.keywords || [])].join(' ').toLowerCase().includes(query);
