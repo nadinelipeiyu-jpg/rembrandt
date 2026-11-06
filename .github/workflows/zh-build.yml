@@ -1,0 +1,21 @@
+# Builds the Traditional Chinese (zh-TW) Mac app for Apple silicon. Run it from the Actions tab
+# ("Build zh-TW Mac app" → Run workflow); it also runs on every push to main. The .dmg is in the
+# run's artifacts (rembrandt-macos-aarch64).
+name: Build zh-TW Mac app
+permissions:
+  contents: read
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore: ['**.md', 'docs/**']
+
+jobs:
+  mac:
+    uses: ./.github/workflows/build.yml
+    with:
+      os: macos-latest
+      target: aarch64-apple-darwin
+      args: --target aarch64-apple-darwin --bundles dmg
+      server: macos-aarch64
+    secrets: inherit

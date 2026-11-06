@@ -456,7 +456,7 @@ fn urlencoding_decode(s: &str) -> String {
 // or partial download is never installed), installs it and restarts. Progress is polled by the
 // web side. Phones update from their stores.
 
-const REPO: &str = "thesnarkitecht/rembrandt";
+const REPO: &str = "nadinelipeiyu-jpg/rembrandt"; // zh-TW fork: updates come from its own releases
 
 #[derive(Clone)]
 struct Pending {

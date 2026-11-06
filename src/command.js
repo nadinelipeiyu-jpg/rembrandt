@@ -436,7 +436,7 @@ export function createCommandBar(app, mount = null) {
       if (!index) buildIndex();
       const seen = new Set();
       for (const c of index) {
-        const sc = score(lq, c.label);
+        const sc = Math.max(score(lq, c.label), window.__zh ? score(lq, window.__zh(c.label)) : 0);
         const key = `${c.tool}|${c.section}|${c.control}`;
         if (sc && !seen.has(key)) { seen.add(key); found.push({ kind: 'go', title: c.label, hint: c.control ? `${c.section} · ${c.tool === 'ai' ? 'AI' : 'Edit'}` : c.tool === 'ai' ? 'AI' : c.section ? 'Edit' : 'Tool', run: () => goTo(c), score: sc }); }
       }
@@ -470,10 +470,10 @@ export function createCommandBar(app, mount = null) {
   function goTo(c) {
     app.setTool(c.tool);
     if (!c.section) return;
-    const sec = [...document.querySelectorAll('#panelBody .sec')].find((s) => s.querySelector('.sec-title')?.textContent === c.section);
+    const sec = [...document.querySelectorAll('#panelBody .sec')].find((s) => (window.__en?.(s.querySelector('.sec-title')) ?? s.querySelector('.sec-title')?.textContent) === c.section);
     if (!sec) return;
     if (!sec.classList.contains('open')) sec.querySelector('.sec-head').click();
-    const ctl = c.control && [...sec.querySelectorAll('.ctl')].find((x) => x.querySelector('label')?.textContent === c.control);
+    const ctl = c.control && [...sec.querySelectorAll('.ctl')].find((x) => (window.__en?.(x.querySelector('label')) ?? x.querySelector('label')?.textContent) === c.control);
     const target = ctl || sec;
     revealIn(target, { center: true, behavior: 'smooth' });
     target.classList.remove('flash'); void target.offsetWidth; target.classList.add('flash');

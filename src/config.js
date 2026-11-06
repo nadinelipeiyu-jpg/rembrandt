@@ -2,7 +2,7 @@
 // service. Official builds, self-hosters and packagers can override them without rebuilding by
 // defining `window.LUMEN_CONFIG` in a script loaded before the app (rembrandt-server writes one).
 const DEFAULTS = {
-  repo: 'thesnarkitecht/rembrandt',   // GitHub repository: releases, update check, issues
+  repo: 'nadinelipeiyu-jpg/rembrandt', // GitHub repository: releases, update check, issues (zh-TW fork)
   supportUrl: '',                     // a donation page; the Support button only shows when this is set
   siteUrl: '',                        // the Rembrandt website (pricing page, share links, OAuth redirects); defaults to this page's origin
   serverUrl: undefined,               // set by rembrandt-server ('' = same origin): its photos folder
