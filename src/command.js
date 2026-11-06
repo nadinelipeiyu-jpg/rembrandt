@@ -17,6 +17,7 @@ import { isTauri } from './platform.js';
 import { aiOn, shown, onWorkspaceChange } from './workspace.js';
 import { warmNeedle, needleCalls, needleState, applyCalls } from './ai/needle.js';
 import { track } from './feedback.js';
+import { toEnglish } from './zh-words.js';   // zh-TW fork: requests in Chinese
 
 const c100 = (v) => clamp(Math.round(v), -100, 100);
 const add = (key, d, lo = -100, hi = 100) => (p, k) => ({ [key]: clamp(Math.round((p[key] + d * k) * 100) / 100, lo, hi) });
@@ -202,7 +203,7 @@ const fmtV = (v, dp) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixe
 
 // The clauses a request splits into, as interpret reads them.
 export function clausesOf(text) {
-  return digits(text.toLowerCase().replace(/black and white/g, 'b&w'))
+  return digits(toEnglish(text).toLowerCase().replace(/black and white/g, 'b&w'))
     .replace(/(\d(?:\.\d+)?\s*(?:%|points?|pts?|stops?|ev)?)\s+(?=[a-z])(?!(?:points?|pts?|stops?|ev|brighter|darker|warmer|cooler|up|down|higher|lower)\b)/g, '$1, ')
     .split(/,|;|\band\b|\bbut\b|\bthen\b|\bwith\b|\s\+\s/).map((c) => c.trim()).filter(Boolean);
 }
@@ -213,7 +214,7 @@ export const isExact = (clause, p, ctx = null) => !!exact(clause, p, ctx);
 // per clause (from clausesOf), used where the clause isn't an exact request.
 export function interpret(text, p, smart = null, aspect = 1.5) {
   let next = clone(p), labels = [];
-  const t = digits(text.toLowerCase().replace(/black and white/g, 'b&w'))
+  const t = digits(toEnglish(text).toLowerCase().replace(/black and white/g, 'b&w'))
     // "exposure +0.5 contrast 20": a number followed by another control starts a new clause.
     .replace(/(\d(?:\.\d+)?\s*(?:%|points?|pts?|stops?|ev)?)\s+(?=[a-z])(?!(?:points?|pts?|stops?|ev|brighter|darker|warmer|cooler|up|down|higher|lower)\b)/g, '$1, ');
   let ctx = null;
@@ -294,6 +295,7 @@ let tiltMemo = { key: '', t: null };   // the tilt measurement is slowish; once 
 // Everything a request asks for, against `p`: pasted edits first, then the words on top.
 // → { next, labels } | { error } | null.
 export function understand(app, text, p, smart = null) {
+  text = toEnglish(text);
   const words = [];
   let next = p, labels = [];
   for (const clause of text.split(/,|;|\band\b|\bthen\b/i)) {
@@ -353,7 +355,7 @@ export function createCommandBar(app, mount = null) {
       if (rec) { rec.stop(); return; }
       let said = '';
       rec = new Speech();
-      rec.lang = navigator.language;
+      rec.lang = 'zh-TW';   // zh-TW fork: listen for Chinese (English words still come through)
       rec.interimResults = true;
       // Words show and preview on the photo while you talk; when you stop, they run.
       rec.onresult = (e) => { said = [...e.results].map((r) => r[0].transcript).join(' '); input.value = said; input.dispatchEvent(new Event('input')); };
@@ -365,7 +367,7 @@ export function createCommandBar(app, mount = null) {
       rec.start();
     });
     // Example requests take turns in the empty box.
-    const EX = ['Tell me what to change…', 'exposure −0.3', 'paste from the last photo', 'shadows +25', 'set contrast to 20', 'same as photo 2', 'blue saturation −30', 'a bit warmer', 'golden hour'];
+    const EX = ['告訴我要改什麼…', '曝光 −0.3', '套用上一張的編輯', '陰影加25', '對比調到20', '跟第2張一樣', '藍色飽和度 −30', '暖一點', '黃金時刻'];   // zh-TW fork
     let ex = 0;
     input.placeholder = EX[0];
     setInterval(() => { if (!active && !input.value) input.placeholder = EX[(ex = (ex + 1) % EX.length)]; }, 3200);

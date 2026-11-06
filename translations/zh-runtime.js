@@ -4,7 +4,7 @@
 (() => {
   'use strict';
   const EXACT = new Map(Object.entries(__EXACT__));
-  const PATTERNS = __PATTERNS__.map(([en, zh]) => {
+  const PATTERNS = __PATTERNS__.map(([en, zh, strict]) => {
     const parts = en.split(/\{(\d+)\}/);
     let re = '^';
     const order = [];
@@ -17,7 +17,7 @@
     // With little fixed text ("Color {0}") a pattern could swallow a longer English phrase, so its
     // values may only be numbers, names with digits, or strings this table can translate.
     const loose = (parts.filter((_, i) => i % 2 === 0).join('').match(/[A-Za-z]/g) || []).length >= 12;
-    return { re: new RegExp(re + '$'), order, zh, key, loose };
+    return { re: new RegExp(re + '$'), order, zh, key, loose, strict };
   });
 
   const norm = (s) => s.replace(/\s+/g, ' ').trim();
@@ -31,6 +31,7 @@
       if (p.key && !t.includes(p.key)) continue;
       const m = p.re.exec(t);
       if (!m) continue;
+      if (p.strict && m.slice(1).some((v) => /[A-Za-z]/.test(v) && !EXACT.has(v.trim()))) continue;
       if (!p.loose && m.slice(1).some((v) => /[A-Za-z]{2}/.test(v) && /(^|\s)[a-z]/.test(v) && !EXACT.has(v.trim()))) continue;
       const vals = {};
       p.order.forEach((n, i) => { vals[n] = sub(m[i + 1].trim()); });

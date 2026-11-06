@@ -21,10 +21,11 @@ def put(en, zh):
     if not en or not zh or en == zh:
         return
     if re.search(r'\{\d+\}', en):
-        lits = re.sub(r'\{\d+\}', '', en)
-        if len(re.findall(r'[A-Za-z]', lits)) < 3:
+        letters = len(re.findall(r'[A-Za-z]', re.sub(r'\{\d+\}', '', en)))
+        if letters < 2:
             return  # too little fixed text to recognise safely
-        patterns.setdefault(en, zh)
+        # With very little fixed text ("{0} to {1}"), every value must itself be a known string.
+        patterns.setdefault(en, [zh, letters < 4])
     else:
         exact.setdefault(en, zh)
 
@@ -39,7 +40,7 @@ for en, zh in table.items():
         put(norm(en)[:-2], re.sub(r'\s*·\s*$', '', zh))
 
 # Most specific first: more fixed text wins.
-ordered = sorted(patterns.items(), key=lambda kv: -len(re.sub(r'\{\d+\}', '', kv[0])))
+ordered = [[en, zh, strict] for en, (zh, strict) in sorted(patterns.items(), key=lambda kv: -len(re.sub(r'\{\d+\}', '', kv[0])))]
 js = template.replace('__EXACT__', json.dumps(exact, ensure_ascii=False, separators=(',', ':'))) \
              .replace('__PATTERNS__', json.dumps(ordered, ensure_ascii=False, separators=(',', ':')))
 (root / 'src' / 'zh-tw.js').write_text(js, encoding='utf8')
