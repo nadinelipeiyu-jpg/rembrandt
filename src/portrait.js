@@ -7,6 +7,7 @@ import { newMask, newComponent, maskAdjDefaults } from './params.js';
 
 // key: [label, People parts, adjustments at 100].
 export const PORTRAIT = {
+  even: ['Even skin tone', ['faceSkin', 'bodySkin'], { even: 100 }],   // zh-TW fork
   skin: ['Smooth skin', ['faceSkin', 'bodySkin'], { clarity: -85, contrast: -8, highlights: -10 }],
   face: ['Light the face', ['faceSkin'], { exposure: 0.45, shadows: 30 }],
   eyes: ['Brighten eyes', ['eyes'], { exposure: 0.6, saturation: -35, whites: 15 }],

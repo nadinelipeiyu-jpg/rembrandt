@@ -24,6 +24,8 @@ const RULES = [
   [/[，、。；]/g, ', '], [/[＋]/g, '+'], [/[－—]/g, '-'], [/[％]/g, '%'], [/[．]/g, '.'],
   [/[０-９]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0xfee0)],
   // Problems ("too dark") and looks, before the words inside them.
+  [/勻膚|均勻膚色|膚色均勻|膚色不均|膚色/g, w('even skin tone')],
+  [/泛紅|紅臉|臉紅|去紅|退紅|紅紅的/g, w('redness')],
   [/天空(?:太|過|好|很)?白|天空過曝|天空死白|死白|過曝的天空|爆掉/g, w('blown sky')],
   [/曝光不足|太暗|偏暗|太黑|好暗|很暗|暗暗的/g, w('too dark')],
   [/曝光過度|過曝|太亮|偏亮|好亮|很亮/g, w('too bright')],

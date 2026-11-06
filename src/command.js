@@ -18,6 +18,7 @@ import { aiOn, shown, onWorkspaceChange } from './workspace.js';
 import { warmNeedle, needleCalls, needleState, applyCalls } from './ai/needle.js';
 import { track } from './feedback.js';
 import { toEnglish } from './zh-words.js';   // zh-TW fork: requests in Chinese
+import { setPortrait, portraitAmount } from './portrait.js';
 
 const c100 = (v) => clamp(Math.round(v), -100, 100);
 const add = (key, d, lo = -100, hi = 100) => (p, k) => ({ [key]: clamp(Math.round((p[key] + d * k) * 100) / 100, lo, hi) });
@@ -290,6 +291,7 @@ export function pasteSource(app, clause) {
   return c ? { clip: c, label: `Pasted ${batch.describeClip(c)}` } : { error: 'Nothing copied yet. Try “paste the edits from the previous photo”.' };
 }
 
+const EVEN_SKIN = /\beven(ing)?( out)?( the)? skin\b|\bskin tone\b|\bredness\b/;
 let tiltMemo = { key: '', t: null };   // the tilt measurement is slowish; once per photo and framing
 
 // Everything a request asks for, against `p`: pasted edits first, then the words on top.
@@ -307,6 +309,21 @@ export function understand(app, text, p, smart = null) {
       if (!t) return { error: 'I can’t find a horizon or straight lines to level this by.' };
       next = { ...next, geometry: straightened(app, next.geometry, t.angle) };
       labels.push(`Straighten ${t.angle > 0 ? '+' : ''}${t.angle.toFixed(1)}°`);
+      continue;
+    }
+    // zh-TW fork: "even skin tone 60", "reduce redness", "less even skin tone": the portrait slider.
+    const ev = digits(clause.toLowerCase());
+    if (EVEN_SKIN.test(ev)) {
+      const redness = /\bredness\b/.test(ev), cur = portraitAmount(next, 'even'), n = ev.match(/\d+(?:\.\d+)?/);
+      let v;
+      if (n) v = +n[0];
+      else if (!redness && RESET.test(ev) && !UP.test(ev)) v = 0;
+      else if (!redness && /\b(less|down|lower|reduce|decrease)\b/.test(ev)) v = cur - 20;
+      else v = cur ? cur + 20 : 50;
+      v = clamp(Math.round(v), 0, 100);
+      next = clone(next);
+      setPortrait(next, 'even', v, app.img?.aspect || 1.5);
+      labels.push(`Even skin tone ${v}`);
       continue;
     }
     const src = pasteSource(app, clause);
@@ -383,7 +400,7 @@ export function createCommandBar(app, mount = null) {
       smart = new Map();
       const base = app.params;
       for (const c of clausesOf(q)) {
-        if (isExact(c, base) || /\bstraighten|\blevel\b|\bcrooked|\btilt|\bhorizon|\bpaste|\bsame as|\bmatch\b|\bcopy\b/.test(c)) continue;
+        if (isExact(c, base) || EVEN_SKIN.test(c) || /\bstraighten|\blevel\b|\bcrooked|\btilt|\bhorizon|\bpaste|\bsame as|\bmatch\b|\bcopy\b/.test(c)) continue;
         const calls = await Promise.race([needleCalls(c, { wait: true }), new Promise((r) => setTimeout(() => r(null), 25000))]);
         if (calls) smart.set(c, calls);
       }

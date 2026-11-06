@@ -204,7 +204,7 @@ export function buildMaskPanel(app) {
       onReset: () => { m.adj = maskAdjDefaults(); app.commit(); app.requestRender(); refresh(); },
     });
     const S = (k, label, min, max, step = 1, extra = {}) => {
-      const s = slider({ label, min, max, step, def: D[k], get: () => m.adj[k], set: (v) => { m.adj[k] = v; app.requestRender(); }, commit: () => app.commit(), ...extra });
+      const s = slider({ label, min, max, step, def: D[k], get: () => m.adj[k] ?? D[k], set: (v) => { m.adj[k] = v; app.requestRender(); }, commit: () => app.commit(), ...extra });
       reg.push(s);
       return s.el;
     };
@@ -216,6 +216,7 @@ export function buildMaskPanel(app) {
       S('temp', 'Temperature', -100, 100, 1, { track: 'linear-gradient(90deg,#4f7dff,#9fb4d9 45%,#d9c49f 55%,#ffb53d)' }),
       S('saturation', 'Saturation', -100, 100),
       S('clarity', 'Clarity', -100, 100),
+      S('even', 'Even skin tone', 0, 100),
       disclosure('mask-adj-more', 'More adjustments',
         S('whites', 'Whites', -100, 100),
         S('blacks', 'Blacks', -100, 100),

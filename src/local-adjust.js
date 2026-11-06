@@ -24,7 +24,7 @@ uniform vec4 uCP[6];
 uniform vec4 uCQ[6];
 uniform mat3 uMWB;
 uniform vec4 uMTone;
-uniform float uMContrast, uMClarity, uMSat, uMDehaze;
+uniform float uMContrast, uMClarity, uMSat, uMDehaze, uMEven;
 uniform vec3 uMTint;
 in vec2 vUv; out vec4 o;
 
@@ -36,7 +36,7 @@ float toneGain(float ev, vec4 t) {
   return t.x * 1.3 * gB + t.y * 1.6 * gS + t.z * 1.7 * gH + t.w * 1.3 * gW;
 }
 
-float compW(int i, vec2 H, vec3 lab) {
+float compW(int i, vec2 H, vec3 lab, vec2 uv) {
   int t = uCType[i];
   vec4 P = uCP[i];
   vec4 Q = uCQ[i];
@@ -53,7 +53,7 @@ float compW(int i, vec2 H, vec3 lab) {
     float f = clamp(Q.y, 0.0, 1.0);
     w = 1.0 - smoothstep(1.0 - f - 1e-4, 1.0, r);
   } else if (t == 3) {
-    w = textureLod(uBrush, vUv, 0.0).a;
+    w = textureLod(uBrush, uv, 0.0).a;
   } else if (t == 4) {
     float f = max(P.z, 1e-3);
     w = smoothstep(P.x - f, P.x, lab.x) * (1.0 - smoothstep(P.y, P.y + f, lab.x));
@@ -61,25 +61,25 @@ float compW(int i, vec2 H, vec3 lab) {
     float d = length(lab.yz - P.xy) + 0.35 * abs(lab.x - Q.x);
     w = 1.0 - smoothstep(P.z, P.z + max(P.w, 1e-3), d);
   } else if (t == 6) {
-    w = P.x > 0.5 ? textureLod(uSubj, vUv, 0.0).r : 0.0;
+    w = P.x > 0.5 ? textureLod(uSubj, uv, 0.0).r : 0.0;
   } else if (t == 7) {
-    float d = textureLod(uDepth, vUv, 0.0).r;
+    float d = textureLod(uDepth, uv, 0.0).r;
     float f = max(P.z, 1e-3);
     w = P.w > 0.5 ? smoothstep(P.x - f, P.x, d) * (1.0 - smoothstep(P.y, P.y + f, d)) : 0.0;
   } else if (t == 8) {
     int ch = int(P.x + 0.5);
-    vec4 ob = textureLod(uObj, vUv, 0.0);
+    vec4 ob = textureLod(uObj, uv, 0.0);
     w = P.y > 0.5 ? (ch == 0 ? ob.r : ch == 1 ? ob.g : ch == 2 ? ob.b : ob.a) : 0.0;
   }
   if (uCInv[i] == 1) w = 1.0 - w;
   return w;
 }
 
-void main() {
-  vec4 inC = textureLod(uIn, vUv, 0.0);
-  vec2 H = vec2((vUv.x - 0.5) * uAspect, vUv.y - 0.5);
+// The mask's weight at a position.
+float maskAt(vec2 uv) {
+  vec2 H = vec2((uv.x - 0.5) * uAspect, uv.y - 0.5);
   // Ranges are selected on the photo as it looks by default (display-referred), like the picker.
-  vec3 sc = textureLod(uSrc, vUv, 0.0).rgb;
+  vec3 sc = textureLod(uSrc, uv, 0.0).rgb;
   if (uSrcLinear == 1) {
     vec3 r = FROM_SRGB * (sc * uSrcGain);
     sc = TO_SRGB * rgbTone(r, uInC, uInK, 1.0);
@@ -88,13 +88,18 @@ void main() {
   float w = 0.0;
   for (int i = 0; i < 6; i++) {
     if (i >= uNComp) break;
-    float c = compW(i, H, lab);
+    float c = compW(i, H, lab, uv);
     int m = uCMode[i];
     if (i == 0 || m == 0) w = max(w, c);
     else if (m == 1) w *= (1.0 - c);
     else w *= c;
   }
-  w = clamp(w * uAmount, 0.0, 1.0);
+  return clamp(w * uAmount, 0.0, 1.0);
+}
+
+void main() {
+  vec4 inC = textureLod(uIn, vUv, 0.0);
+  float w = maskAt(vUv);
 
   vec3 rgb = inC.rgb;
   vec3 res = rgb;
@@ -121,6 +126,48 @@ void main() {
       vec3 l = oklab(max(a, 0.0));
       l.yz *= max(1.0 + uMSat + 0.25 * max(uMDehaze, 0.0), 0.0);
       l.yz += uMTint.xy * uMTint.z * smoothstep(0.0, 0.1, l.x) * max(l.x, 0.25);
+      a = unOklab(l);
+    }
+    if (uMEven > 0.0) {
+      // Even skin tone (zh-TW fork): each pixel takes the colour of the skin around it, so blotches,
+      // spots and redness fade while lightness (and with it pores and texture) stays as it was.
+      vec3 l = oklab(max(a, 0.0));
+      float eg = exp2(gain);
+      vec3 lb = oklab(max(bl * eg, 0.0));
+      // The surrounding skin colour: the softened image here and on three rings around it, each
+      // sample counted where the mask is, the colour is skin-like and the light is similar.
+      vec2 ref = lb.yz * 0.25;
+      float refL = lb.x * 0.25, wsum = 0.25;
+      for (int i = 0; i < 18; i++) {
+        int ring = i / 6;
+        float ang = float(i) * 1.0472 + float(ring) * 0.3491;
+        float r = ring == 0 ? 0.04 : ring == 1 ? 0.09 : 0.15;
+        vec2 uv = clamp(vUv + vec2(cos(ang) * r / max(uAspect, 1e-3), sin(ang) * r), 0.0, 1.0);
+        vec3 s = oklab(max(uMWB * textureLod(uBlurM, uv, 0.0).rgb * eg, 0.0));
+        float hs = atan(s.z, s.y), cs = length(s.yz);
+        float skin = smoothstep(-0.2, 0.2, hs) * (1.0 - smoothstep(1.4, 1.75, hs)) * smoothstep(0.008, 0.02, cs);
+        // Favour the less red skin nearby: that is the tone a blotch should match.
+        float k = maskAt(uv) * skin * exp(-pow((s.x - l.x) / 0.22, 2.0)) * (0.3 + 2.0 * smoothstep(-0.005, 0.02, lb.y - s.y));
+        ref += s.yz * k;
+        refL += s.x * k;
+        wsum += k;
+      }
+      ref /= wsum;
+      refL /= wsum;
+      // A patch that is redder than the skin around it is usually darker too (a mark, a flush): lift
+      // its soft lightness toward the surroundings. Ordinary shading isn't redder, so it stays.
+      float redder = smoothstep(0.004, 0.03, lb.y - ref.x);
+      // Pixels far from the softened light are edges (hair, brows, eyes) and are left alone, except
+      // small red spots, which are redder than the skin around them.
+      float redPix = smoothstep(0.012, 0.05, l.y - ref.x);
+      float keep = max(exp(-pow((l.x - lb.x) / 0.1, 2.0)), redPix);
+      vec2 ab = mix(l.yz, ref, uMEven * 0.85 * keep);
+      // What redness is left (a flushed face, red cheeks: hue under ~42°) turns toward a natural 48°.
+      float C = length(ab), h = atan(ab.y, ab.x);
+      float red = (1.0 - smoothstep(0.436, 0.733, h)) * smoothstep(-0.35, 0.0, h);
+      h = mix(h, 0.838, uMEven * 0.5 * red * keep);
+      l.yz = C * vec2(cos(h), sin(h));
+      l.x += uMEven * max(clamp(refL - lb.x, 0.0, 0.15) * 0.7 * redder * keep, clamp(refL - l.x, 0.0, 0.2) * 0.5 * redPix);
       a = unOklab(l);
     }
     res = mix(rgb, max(a, 0.0), w);
@@ -175,6 +222,7 @@ export function maskUniforms(m, aspect) {
     uMClarity: a.clarity / 100,
     uMSat: a.saturation / 100,
     uMDehaze: (a.dehaze || 0) / 100,
+    uMEven: (a.even || 0) / 100,
     uMTint: [tx, ty, (a.tintAmt / 100) * 0.06],
     uObjTex: objTex,
   };

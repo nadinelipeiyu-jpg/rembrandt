@@ -114,6 +114,7 @@ export function maskAdjDefaults() {
   return {
     exposure: 0, contrast: 0, highlights: 0, shadows: 0, whites: 0, blacks: 0,
     temp: 0, tint: 0, saturation: 0, clarity: 0, dehaze: 0, hue: 30, tintAmt: 0,
+    even: 0,   // zh-TW fork: even skin tone (local-adjust.js)
   };
 }
 
@@ -153,7 +154,7 @@ export function newMask(type, aspect, index) {
 
 export function maskHasEffect(m) {
   const d = maskAdjDefaults();
-  return Object.keys(d).some((k) => k !== 'hue' && m.adj[k] !== d[k]);
+  return Object.keys(d).some((k) => k !== 'hue' && (m.adj[k] ?? d[k]) !== d[k]);
 }
 
 // Everything that is not geometry / masks.
